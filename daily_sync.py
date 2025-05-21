@@ -196,6 +196,35 @@ def parse_transfers(transfer_args: List[str]) -> List[Dict]:
         except ValueError:
             logger.error(f"❌ Định dạng transfer không hợp lệ: {transfer}. Cần định dạng 'source,destination'")
     return transfers
+def extract_remote_name(remote_path: str) -> str:
+    """
+    Trích xuất phần remote từ chuỗi kiểu 'remote:path/to/file'
+    """
+    if ":" not in remote_path:
+        raise ValueError("Chuỗi không hợp lệ: thiếu dấu ':' để phân tách remote.")
+    return remote_path.split(":", 1)[0]
+
+def get_gdrive_free_space_percent_from_path(remote_path: str) -> tuple[bool, float | str]:
+    try:
+        remote = extract_remote_name(remote_path)
+        result = subprocess.run(
+            ["rclone", "about", f"{remote}:", "--json"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True
+        )
+        data = json.loads(result.stdout)
+        total = int(data["total"])
+        free = int(data["free"])
+        percent_free = (free / total) * 100 if total > 0 else 0
+        return True, percent_free
+    except ValueError as ve:
+        return False, f"Lỗi chuỗi input: {ve}"
+    except subprocess.CalledProcessError as e:
+        return False, f"Lỗi chạy rclone: {e.stderr.strip()}"
+    except (KeyError, ValueError, json.JSONDecodeError) as e:
+        return False, f"Lỗi xử lý dữ liệu JSON: {e}"
 
 def sync_files():
     setup_logging()
@@ -217,6 +246,13 @@ def sync_files():
     for transfer in transfers:
         source = transfer["SOURCE"]
         destination = transfer["DESTINATION"]
+        success, percent = get_gdrive_free_space_percent_from_path(destination)
+        if not success:
+            logger.error(f"❌ Không thể lấy thông tin dung lượng trống từ {destination}: {percent}")
+            continue
+        if percent < 2:
+            logger.error(f"❌ Dung lượng trống trên {destination} dưới 2%: {percent:.2f}%")
+            continue
         logger.info(f"🔄 Bắt đầu đồng bộ từ {source} đến {destination}")
         
         # Kiểm tra sự tồn tại của thư mục nguồn
