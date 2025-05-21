@@ -218,7 +218,7 @@ def get_gdrive_free_space_percent_from_path(remote_path: str) -> tuple[bool, flo
         total = int(data["total"])
         free = int(data["free"])
         percent_free = (free / total) * 100 if total > 0 else 0
-        return True, percent_free
+        return True, percent_free, free
     except ValueError as ve:
         return False, f"Lỗi chuỗi input: {ve}"
     except subprocess.CalledProcessError as e:
@@ -246,7 +246,7 @@ def sync_files():
     for transfer in transfers:
         source = transfer["SOURCE"]
         destination = transfer["DESTINATION"]
-        success, percent = get_gdrive_free_space_percent_from_path(destination)
+        success, percent,free_space = get_gdrive_free_space_percent_from_path(destination)
         if not success:
             logger.error(f"❌ Không thể lấy thông tin dung lượng trống từ {destination}: {percent}")
             continue
@@ -282,11 +282,17 @@ def sync_files():
             if total_size_copied / (1024 ** 3) >= CONFIG["MAX_TRANSFER_GB"]:
                 logger.info(f"📦 Đạt giới hạn {CONFIG['MAX_TRANSFER_GB']}GB")
                 return
+            
 
             src_path = f"{source}/{file['Path']}"
             dest_path = f"{destination}/{file['Path']}"
             file_size = file.get("Size", 0)
 
+            if (total_size_copied + file_size) > free_space:
+                logger.error(f"❌ Không đủ dung lượng trống trên {destination} để copy file: {file['Path']}")
+                continue
+            else:
+                logger.info(f"✅ Dung lượng trống ({free_space/(1024**2):.2f} MB) đủ để copy file: {file['Path']} with size {file_size/(1024**2):.2f} MB")
             # Kiểm tra file nguồn
             try:
                 src_exists = bool(rclone.ls(src_path))
