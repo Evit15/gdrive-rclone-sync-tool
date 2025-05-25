@@ -19,7 +19,8 @@ CONFIG = {
         "--transfers", "2",
         "--log-level", "DEBUG",
         "--retries", "3",
-        "--retries-sleep", "5s"
+        "--retries-sleep", "5s",
+        "--bwlimit", "5M"
     ]
 }
 
