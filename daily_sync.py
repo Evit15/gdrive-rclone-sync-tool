@@ -24,9 +24,35 @@ CONFIG = {
     ]
 }
 
+RemoteConfig = None
 logger = logging.getLogger("rclone_sync")
 logger.setLevel(logging.DEBUG)
 
+
+def get_rclone_remote_type(remote_name: str) -> str | None:
+    try:
+        global RemoteConfig
+        if RemoteConfig is None:
+            result = subprocess.run(
+                ["rclone", "config", "dump"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            RemoteConfig = json.loads(result.stdout)
+        remote_info = RemoteConfig.get(remote_name)
+        if remote_info:
+            return remote_info.get("type")
+        else:
+            print(f"Remote '{remote_name}' not found.")
+            return None
+    except subprocess.CalledProcessError as e:
+        print(f"Error running rclone: {e.stderr}")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON: {e}")
+        return None
+    
 def setup_logging():
     os.makedirs(CONFIG["LOG_DIR"], exist_ok=True)
     log_file = os.path.join(CONFIG["LOG_DIR"], f"daily_sync_{datetime.date.today()}.log")
@@ -260,7 +286,18 @@ def sync_files():
         if not check_remote_exists(source):
             logger.error(f"❌ Bỏ qua đồng bộ vì thư mục nguồn không tồn tại: {source}")
             continue
-            
+
+        remote_source_name = extract_remote_name(source)
+        remote_dest_name = extract_remote_name(destination)
+        remote_source_type = get_rclone_remote_type(remote_source_name)
+        remote_dest_type = get_rclone_remote_type(remote_dest_name)
+        if remote_source_type == remote_dest_type and remote_source_type == "drive":
+            hash_algo = "md5"
+        elif remote_source_type == remote_dest_type and remote_source_type == "onedrive":
+            hash_algo = "QuickXorHash"
+        else:
+            hash_algo = None
+        logger.info(f"🔍 Sử dụng thuật toán hash: {hash_algo} cho {remote_source_type} và {remote_dest_type}")
         files = get_files_to_copy(source, destination)
         if not files:
             source_files = get_cached_files(source, is_source=True)
@@ -307,7 +344,7 @@ def sync_files():
             logger.info(f"🚚 Đang copy: {file['Path']} ({file_size/(1024**2):.2f} MB)")
             success, error_msg = run_rclone_copy(src_path, dest_path)
             
-            if success:
+            if success and hash_algo is not None:
                 src_hash = get_file_hash(src_path)
                 dest_hash = get_file_hash(dest_path)
                 if src_hash and dest_hash and src_hash == dest_hash:
@@ -333,6 +370,10 @@ def sync_files():
                             logger.error(f"❌ Lỗi khi copy lại {file['Path']}: {error_msg}")
                     else:
                         logger.warning(f"⚠️ Không thể xóa file lỗi: {file['Path']}")
+            elif success and hash_algo is None:
+                logger.info(f"✅ Copy thành công: {file['Path']} nhưng không kiểm tra hash (không hỗ trợ {remote_source_type} và {remote_dest_type})")
+                total_copied += 1
+                total_size_copied += file_size
             else:
                 logger.error(f"❌ Lỗi khi copy {file['Path']}: {error_msg}")
                 if is_quota_exceeded(error_msg):
