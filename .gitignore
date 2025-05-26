@@ -173,7 +173,7 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-cache
+*cache
 logs
 run.bat
 test.py

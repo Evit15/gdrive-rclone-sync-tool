@@ -170,14 +170,41 @@ def delete_file(remote_path: str) -> bool:
         logger.warning(f"⚠️ Không thể xóa file {remote_path}: {e.stderr}")
         return False
 
-def get_files_to_copy(source: str, destination: str, hash_algo) -> List[Dict]:
+def get_cached_sync_source_file_name(source: str) -> str:
     today = datetime.datetime.now().strftime('%Y-%m-%d')
-    cache_file = os.path.join(CONFIG["CACHE_DIR"], f"sync_list_{sanitize_path(source)}_{today}.json")
+    return os.path.join(CONFIG["CACHE_DIR"], f"sync_list_{sanitize_path(source)}_{today}.json")
+
+def get_cached_sync_source_file_name_success(source: str) -> str:
+    return f"success_{get_cached_sync_source_file_name(source)}"
+
+def update_cache_file(source: str):
+    cache_file = get_cached_sync_source_file_name(source)
+    cache_file_status = get_cached_sync_source_file_name_success(source)
+    old_file = []
+    with open(cache_file, 'r', encoding='utf-8') as f:
+        old_file = json.load(f)
+    
+    if os.path.exists(cache_file_status):
+        success_file = []
+        logger.info(f"📦 Đang cập nhật danh sách file thành công từ: {cache_file_status}")
+        with open(cache_file_status, 'r', encoding='utf-8') as f:
+            success_file = json.load(f)
+        new_file = []
+        for file in old_file:
+            if file['Path'] not in success_file:
+                new_file.append(file)
+                logger.info(f"📦 Thêm file mới cần copy: {file['Path']}")
+        save_json_to_file(new_file, cache_file)
+    else:
+        logger.info(f"📦 Không tìm thấy danh sách file thành công. Sử dụng danh sách file cần copy từ: {cache_file}")
+        return old_file
+    
+
+def get_files_to_copy(source: str, destination: str, hash_algo) -> List[Dict]:
+    cache_file = get_cached_sync_source_file_name(source)
     
     if os.path.exists(cache_file):
-        logger.info(f"📦 Sử dụng danh sách file cần copy từ: {cache_file}")
-        with open(cache_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        return update_cache_file(source)
     
     source_files = get_cached_files(source, is_source=True)
     if not source_files and not check_remote_exists(source):
@@ -262,6 +289,16 @@ def get_gdrive_free_space_percent_from_path(remote_path: str) -> tuple[bool, flo
         logger.error(f"❌ Lỗi xử lý dữ liệu JSON: {e}")
         return False, f"Lỗi xử lý dữ liệu JSON: {e}"
 
+def save_json_to_file(data: json, file_path: str):
+    """
+    Lưu dữ liệu vào file JSON
+    """
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    logger.info(f"✅ Đã lưu dữ liệu vào {file_path}")
+
+
 def sync_files():
     setup_logging()
     total_copied = 0
@@ -317,7 +354,8 @@ def sync_files():
             continue
         
         logger.info(f"📂 Tổng số file cần xử lý từ {source}: {len(files)}")
-
+        success_cache_file_name = get_cached_sync_source_file_name_success(source)
+        files_success = []
         for file in files:
             current_time = datetime.datetime.now()
             if current_time >= stop_time:
@@ -360,6 +398,7 @@ def sync_files():
                     logger.info(f"✅ Copy thành công: {file['Path']} (hash: {src_hash})")
                     total_copied += 1
                     total_size_copied += file_size
+                    files_success.append(file['Path'])
                 else:
                     logger.error(f"❌ Hash không khớp: {file['Path']} (src: {src_hash}, dest: {dest_hash})")
                     if delete_file(dest_path):
@@ -373,6 +412,7 @@ def sync_files():
                                 logger.info(f"✅ Copy lại thành công: {file['Path']} (hash: {src_hash})")
                                 total_copied += 1
                                 total_size_copied += file_size
+                                files_success.append(file['Path'])
                             else:
                                 logger.error(f"❌ Copy lại thất bại, hash vẫn không khớp: {file['Path']}")
                         else:
@@ -383,12 +423,16 @@ def sync_files():
                 logger.info(f"✅ Copy thành công: {file['Path']} nhưng không kiểm tra hash (không hỗ trợ {remote_source_type} và {remote_dest_type})")
                 total_copied += 1
                 total_size_copied += file_size
+                files_success.append(file['Path'])
             else:
                 logger.error(f"❌ Lỗi khi copy {file['Path']}: {error_msg}")
                 if is_quota_exceeded(error_msg):
                     logger.error(f"❌ Dừng do vượt quota: {error_msg}")
                     return
                 continue
+            # Lưu file thành công vào cache
+            save_json_to_file(files_success, success_cache_file_name)
+        logger.info(f"📦 Đã hoàn thành đồng bộ từ {source} đến {destination}")
 
     logger.info(f"🏁 Hoàn tất - Copied: {total_copied} files, Size: {total_size_copied/(1024**3):.2f} GB")
 
