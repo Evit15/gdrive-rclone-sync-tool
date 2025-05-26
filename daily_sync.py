@@ -234,8 +234,10 @@ def extract_remote_name(remote_path: str) -> str:
 def get_gdrive_free_space_percent_from_path(remote_path: str) -> tuple[bool, float | str]:
     try:
         remote = extract_remote_name(remote_path)
+        cmd = ["rclone", "about", f"{remote}:", "--json"]
+        logger.info(f"🔍 Đang lấy thông tin dung lượng trống từ {remote}")
         result = subprocess.run(
-            ["rclone", "about", f"{remote}:", "--json"],
+            cmd,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -247,10 +249,13 @@ def get_gdrive_free_space_percent_from_path(remote_path: str) -> tuple[bool, flo
         percent_free = (free / total) * 100 if total > 0 else 0
         return True, percent_free, free
     except ValueError as ve:
+        logger.error(f"❌ Lỗi chuỗi input: {ve}")
         return False, f"Lỗi chuỗi input: {ve}"
     except subprocess.CalledProcessError as e:
+        logger.error(f"❌ Lỗi khi chạy rclone: {e.stderr.strip()}")
         return False, f"Lỗi chạy rclone: {e.stderr.strip()}"
     except (KeyError, ValueError, json.JSONDecodeError) as e:
+        logger.error(f"❌ Lỗi xử lý dữ liệu JSON: {e}")
         return False, f"Lỗi xử lý dữ liệu JSON: {e}"
 
 def sync_files():
