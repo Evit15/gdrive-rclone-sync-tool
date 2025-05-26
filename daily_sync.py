@@ -113,7 +113,7 @@ def get_cached_files(remote_path: str, is_source: bool = True) -> List[Dict]:
         return []
 
 def get_file_hash(remote_path: str, algo: str = 'md5') -> Optional[str]:
-    logger.debug(f"🔍 Đang lấy hash của {remote_path}")
+    logger.debug(f"🔍 Đang lấy hash của {remote_path} with also is {algo}")
     cmd = ["rclone", "hashsum", algo, remote_path]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', check=True)
