@@ -100,7 +100,7 @@ def get_cached_files(remote_path: str, is_source: bool = True) -> List[Dict]:
                 json.dump([], f, ensure_ascii=False, indent=2)
             return []
     
-    logger.info(f"🔄 Tạo mới cache cho: {remote_path} ({cache_type})")
+    logger.info(f"🔄 Tạo mới cache cho: {remote_path} ({cache_type}) witch path {cache_file}")
     try:
         items = rclone.ls(remote_path, max_depth=9999, args=["--hash"])
         files = [item for item in items if not item.get("IsDir", False)]
@@ -170,7 +170,7 @@ def delete_file(remote_path: str) -> bool:
         logger.warning(f"⚠️ Không thể xóa file {remote_path}: {e.stderr}")
         return False
 
-def get_files_to_copy(source: str, destination: str) -> List[Dict]:
+def get_files_to_copy(source: str, destination: str, hash_algo) -> List[Dict]:
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     cache_file = os.path.join(CONFIG["CACHE_DIR"], f"sync_list_{sanitize_path(source)}_{today}.json")
     
@@ -199,7 +199,11 @@ def get_files_to_copy(source: str, destination: str) -> List[Dict]:
         
         if dest_file:
             # Compare hashes if file exists in both
-            dest_hash = dest_file.get('Hashes', {}).get('md5', '')
+            if hash_algo is None:
+                logger.info(f"📌 File đã tồn tại ở đích: {src_path} (không kiểm tra hash)")
+                continue
+
+            dest_hash = dest_file.get('Hashes', {}).get(hash_algo, '')
             if src_hash and dest_hash and src_hash != dest_hash:
                 logger.info(f"🔄 Hash khác nhau, sẽ copy: {src_path} (src: {src_hash}, dest: {dest_hash})")
                 delete_file(f"{destination}/{src_path}")
@@ -303,7 +307,7 @@ def sync_files():
         else:
             hash_algo = None
         logger.info(f"🔍 Sử dụng thuật toán hash: {hash_algo} cho {remote_source_type} và {remote_dest_type}")
-        files = get_files_to_copy(source, destination)
+        files = get_files_to_copy(source, destination, hash_algo)
         if not files:
             source_files = get_cached_files(source, is_source=True)
             if source_files:
