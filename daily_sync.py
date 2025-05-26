@@ -170,16 +170,17 @@ def delete_file(remote_path: str) -> bool:
         logger.warning(f"⚠️ Không thể xóa file {remote_path}: {e.stderr}")
         return False
 
-def get_cached_sync_source_file_name(source: str) -> str:
+def get_cached_sync_source_file_name(source: str, destination: str) -> str:
     today = datetime.datetime.now().strftime('%Y-%m-%d')
-    return os.path.join(CONFIG["CACHE_DIR"], f"sync_list_{sanitize_path(source)}_{today}.json")
+    return os.path.join(CONFIG["CACHE_DIR"], f"sync_list_{sanitize_path(source+destination)}_{today}.json")
 
-def get_cached_sync_source_file_name_success(source: str) -> str:
-    return f"success_{get_cached_sync_source_file_name(source)}"
+def get_cached_sync_source_file_name_success(source: str, destination: str) -> str:
+    return f"success_{get_cached_sync_source_file_name(source, destination)}"
 
-def update_cache_file(source: str):
-    cache_file = get_cached_sync_source_file_name(source)
-    cache_file_status = get_cached_sync_source_file_name_success(source)
+def update_cache_file(source: str, destination: str):
+    cache_file = get_cached_sync_source_file_name(source, destination)
+    cache_file_status = get_cached_sync_source_file_name_success(source, destination)
+    logger.info(f"📦 Cập nhật cache file từ: {cache_file} va {cache_file_status}")
     old_file = []
     with open(cache_file, 'r', encoding='utf-8') as f:
         old_file = json.load(f)
@@ -201,10 +202,10 @@ def update_cache_file(source: str):
     
 
 def get_files_to_copy(source: str, destination: str, hash_algo) -> List[Dict]:
-    cache_file = get_cached_sync_source_file_name(source)
+    cache_file = get_cached_sync_source_file_name(source, destination)
     
     if os.path.exists(cache_file):
-        return update_cache_file(source)
+        return update_cache_file(source, destination)
     
     source_files = get_cached_files(source, is_source=True)
     if not source_files and not check_remote_exists(source):
@@ -354,7 +355,7 @@ def sync_files():
             continue
         
         logger.info(f"📂 Tổng số file cần xử lý từ {source}: {len(files)}")
-        success_cache_file_name = get_cached_sync_source_file_name_success(source)
+        success_cache_file_name = get_cached_sync_source_file_name_success(source, destination)
         files_success = []
         for file in files:
             current_time = datetime.datetime.now()
