@@ -354,8 +354,8 @@ def sync_files():
             success, error_msg = run_rclone_copy(src_path, dest_path)
             
             if success and hash_algo is not None:
-                src_hash = get_file_hash(src_path)
-                dest_hash = get_file_hash(dest_path)
+                src_hash = get_file_hash(src_path, hash_algo)
+                dest_hash = get_file_hash(dest_path, hash_algo)
                 if src_hash and dest_hash and src_hash == dest_hash:
                     logger.info(f"✅ Copy thành công: {file['Path']} (hash: {src_hash})")
                     total_copied += 1
@@ -367,8 +367,8 @@ def sync_files():
                         logger.info(f"🔄 Thử copy lại: {file['Path']}")
                         success, error_msg = run_rclone_copy(src_path, dest_path)
                         if success:
-                            src_hash = get_file_hash(src_path)
-                            dest_hash = get_file_hash(dest_path)
+                            src_hash = get_file_hash(src_path, hash_algo)
+                            dest_hash = get_file_hash(dest_path, hash_algo)
                             if src_hash and dest_hash and src_hash == dest_hash:
                                 logger.info(f"✅ Copy lại thành công: {file['Path']} (hash: {src_hash})")
                                 total_copied += 1
