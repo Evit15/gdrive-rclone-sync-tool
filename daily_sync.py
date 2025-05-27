@@ -196,6 +196,7 @@ def update_cache_file(source: str, destination: str):
                 new_file.append(file)
                 logger.info(f"📦 Thêm file mới cần copy: {file['Path']}")
         save_json_to_file(new_file, cache_file)
+        return new_file
     else:
         logger.info(f"📦 Không tìm thấy danh sách file thành công. Sử dụng danh sách file cần copy từ: {cache_file}")
         return old_file
@@ -349,7 +350,7 @@ def sync_files():
         if not files:
             source_files = get_cached_files(source, is_source=True)
             if source_files:
-                logger.info(f"✅ Không có file cần copy từ {source}: tất cả file đã tồn tại ở đích")
+                logger.info(f"✅ Không có file cần copy từ {source} den {destination}: tất cả file đã tồn tại ở đích")
             else:
                 logger.error(f"❌ Không thể lấy danh sách file từ {source}")
             continue
